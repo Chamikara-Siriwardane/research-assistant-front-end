@@ -1,11 +1,20 @@
 import { Sparkles } from "lucide-react";
 import ChatInput from "./ChatInput";
+import type { DocumentStatus } from "../types";
 
 interface EmptyStateProps {
   onSend: (text: string, file?: File) => void;
+  onFileUpload?: (file: File) => void;
+  isUploading?: boolean;
+  documentStatus?: DocumentStatus;
 }
 
-export default function EmptyState({ onSend }: EmptyStateProps) {
+export default function EmptyState({
+  onSend,
+  onFileUpload,
+  isUploading,
+  documentStatus,
+}: EmptyStateProps) {
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return "Morning";
@@ -23,7 +32,12 @@ export default function EmptyState({ onSend }: EmptyStateProps) {
       </div>
 
       <div className="w-full max-w-2xl">
-        <ChatInput onSend={onSend} />
+        <ChatInput
+          onSend={onSend}
+          onFileUpload={onFileUpload}
+          isUploading={isUploading}
+          documentStatus={documentStatus}
+        />
       </div>
     </div>
   );

@@ -1,11 +1,33 @@
 import { useState, useRef, useCallback, type KeyboardEvent } from "react";
-import { Plus, ArrowUp, FileText, X } from "lucide-react";
+import { Plus, ArrowUp, FileText, X, Loader2, CheckCircle2, XCircle } from "lucide-react";
+import type { DocumentStatus } from "../types";
 
 interface ChatInputProps {
   onSend: (text: string, file?: File) => void;
+  onFileUpload?: (file: File) => void;
+  isUploading?: boolean;
+  documentStatus?: DocumentStatus;
 }
 
-export default function ChatInput({ onSend }: ChatInputProps) {
+function statusColorClass(status: DocumentStatus): string {
+  if (status === "ready") return "bg-green-50 text-green-700";
+  if (status === "failed") return "bg-red-50 text-red-700";
+  return "bg-user-bubble text-text-secondary";
+}
+
+function statusLabel(uploading: boolean, status: DocumentStatus): string {
+  if (uploading) return "Uploading PDF...";
+  if (status === "processing") return "Processing document...";
+  if (status === "ready") return "Document ready";
+  return "Processing failed";
+}
+
+export default function ChatInput({
+  onSend,
+  onFileUpload,
+  isUploading = false,
+  documentStatus = null,
+}: ChatInputProps) {
   const [text, setText] = useState("");
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -39,12 +61,40 @@ export default function ChatInput({ onSend }: ChatInputProps) {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) setAttachedFile(file);
+    if (file) {
+      setAttachedFile(file);
+      onFileUpload?.(file);
+    }
     e.target.value = "";
   };
 
   return (
     <div className="bg-white border border-border rounded-2xl shadow-sm overflow-hidden">
+      {/* Document status indicator */}
+      {(isUploading || documentStatus) && (
+        <div className="px-4 pt-3 pb-1">
+          <div
+            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium ${
+              statusColorClass(documentStatus)
+            }`}
+          >
+            {(isUploading || documentStatus === "processing") && (
+              <Loader2 size={14} className="animate-spin shrink-0" />
+            )}
+            {documentStatus === "ready" && (
+              <>
+                <FileText size={14} className="shrink-0" />
+                <CheckCircle2 size={14} className="shrink-0 text-green-600" />
+              </>
+            )}
+            {documentStatus === "failed" && (
+              <XCircle size={14} className="shrink-0" />
+            )}
+            <span>{statusLabel(isUploading, documentStatus)}</span>
+          </div>
+        </div>
+      )}
+
       {/* Attached file preview */}
       {attachedFile && (
         <div className="px-4 pt-3 pb-1">

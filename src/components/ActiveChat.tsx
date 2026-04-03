@@ -1,15 +1,24 @@
 import { useEffect, useRef } from "react";
 import { Bot, User } from "lucide-react";
-import type { Message } from "../types";
+import type { Message, DocumentStatus } from "../types";
 import AgentThoughts from "./AgentThoughts";
 import ChatInput from "./ChatInput";
 
 interface ActiveChatProps {
   messages: Message[];
   onSend: (text: string, file?: File) => void;
+  onFileUpload?: (file: File) => void;
+  isUploading?: boolean;
+  documentStatus?: DocumentStatus;
 }
 
-export default function ActiveChat({ messages, onSend }: ActiveChatProps) {
+export default function ActiveChat({
+  messages,
+  onSend,
+  onFileUpload,
+  isUploading,
+  documentStatus,
+}: ActiveChatProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -84,7 +93,12 @@ export default function ActiveChat({ messages, onSend }: ActiveChatProps) {
       {/* Input fixed at bottom */}
       <div className="border-t border-border bg-cream/80 backdrop-blur-sm px-4 py-4">
         <div className="max-w-2xl mx-auto">
-          <ChatInput onSend={onSend} />
+          <ChatInput
+            onSend={onSend}
+            onFileUpload={onFileUpload}
+            isUploading={isUploading}
+            documentStatus={documentStatus}
+          />
         </div>
       </div>
     </div>

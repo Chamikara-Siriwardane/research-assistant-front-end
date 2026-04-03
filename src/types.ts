@@ -15,7 +15,10 @@ export interface Message {
 
 export interface ChatSession {
   id: string;
+  backendId?: number;
   title: string;
   messages: Message[];
   createdAt: Date;
 }
+
+export type DocumentStatus = "processing" | "ready" | "failed" | null;

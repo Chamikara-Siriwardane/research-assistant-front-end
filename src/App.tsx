@@ -5,6 +5,7 @@ import ActiveChat from "./components/ActiveChat";
 import type { ChatSession, Message, DocumentStatus } from "./types";
 import {
   fetchChats,
+  fetchChat,
   createChat as apiCreateChat,
   uploadDocument as apiUploadDocument,
   checkDocumentStatus as apiCheckDocumentStatus,
@@ -13,6 +14,16 @@ import {
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
+}
+
+function getChatId(chat: { id?: number; chat_id?: number }): number | null {
+  if (typeof chat.id === "number") return chat.id;
+  if (typeof chat.chat_id === "number") return chat.chat_id;
+  return null;
+}
+
+function getUpdatedAt(chat: { updated_at?: string; created_at: string }): Date {
+  return new Date(chat.updated_at ?? chat.created_at);
 }
 
 export default function App() {
@@ -30,13 +41,19 @@ export default function App() {
     fetchChats()
       .then((apiChats) => {
         setSessions(
-          apiChats.map((c) => ({
-            id: String(c.chat_id),
-            backendId: c.chat_id,
-            title: c.title,
-            messages: [],
-            createdAt: new Date(c.created_at),
-          }))
+          [...apiChats]
+            .sort(
+              (a, b) =>
+                new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+            )
+            .map((c) => ({
+              id: String(c.id),
+              backendId: c.id,
+              title: c.title,
+              messages: [],
+              createdAt: new Date(c.updated_at),
+              updatedAt: new Date(c.updated_at),
+            }))
         );
       })
       .catch(console.error);
@@ -70,25 +87,62 @@ export default function App() {
   const handleNewChat = useCallback(async () => {
     try {
       const apiChat = await apiCreateChat();
+      const chatId = getChatId(apiChat);
+      if (chatId === null) {
+        throw new Error("Invalid chat payload: missing id");
+      }
       const newSession: ChatSession = {
-        id: String(apiChat.chat_id),
-        backendId: apiChat.chat_id,
+        id: String(chatId),
+        backendId: chatId,
         title: apiChat.title || "New Chat",
         messages: [],
         createdAt: new Date(apiChat.created_at),
+        updatedAt: getUpdatedAt(apiChat),
       };
       setSessions((prev) => [newSession, ...prev]);
-      setActiveSessionId(String(apiChat.chat_id));
+      setActiveSessionId(String(chatId));
       setDocumentStatus(null);
     } catch (err) {
       console.error("Failed to create chat:", err);
     }
   }, []);
 
-  const handleSelectSession = useCallback((id: string) => {
-    setActiveSessionId(id);
-    setDocumentStatus(null);
-  }, []);
+  const handleSelectSession = useCallback(
+    async (id: string) => {
+      setActiveSessionId(id);
+      setDocumentStatus(null);
+
+      if (abortRef.current) {
+        abortRef.current.abort();
+        abortRef.current = null;
+      }
+
+      const selectedSession = sessions.find((s) => s.id === id);
+      const backendId = selectedSession?.backendId ?? Number(id);
+      if (!Number.isFinite(backendId)) return;
+
+      try {
+        const detail = await fetchChat(backendId);
+        updateSession(id, (s) => ({
+          ...s,
+          title: detail.title,
+          createdAt: new Date(detail.created_at),
+          updatedAt: new Date(detail.updated_at),
+          messages: detail.messages.map((m) => ({
+            id: String(m.id),
+            senderType: m.sender_type,
+            content: m.content,
+            thoughts: [],
+            isStreaming: false,
+            timestamp: new Date(m.timestamp),
+          })),
+        }));
+      } catch (err) {
+        console.error("Failed to fetch chat detail:", err);
+      }
+    },
+    [sessions, updateSession]
+  );
 
   // ── PDF Upload + Polling ───────────────────────────────────────
   const handleFileUpload = useCallback(
@@ -98,14 +152,19 @@ export default function App() {
       if (chatId === null) {
         try {
           const apiChat = await apiCreateChat();
-          chatId = apiChat.chat_id;
-          const sid = String(apiChat.chat_id);
+          const createdChatId = getChatId(apiChat);
+          if (createdChatId === null) {
+            throw new Error("Invalid chat payload: missing id");
+          }
+          chatId = createdChatId;
+          const sid = String(createdChatId);
           const newSession: ChatSession = {
             id: sid,
-            backendId: apiChat.chat_id,
+            backendId: createdChatId,
             title: apiChat.title || "New Chat",
             messages: [],
             createdAt: new Date(apiChat.created_at),
+            updatedAt: getUpdatedAt(apiChat),
           };
           setSessions((prev) => [newSession, ...prev]);
           setActiveSessionId(sid);
@@ -165,14 +224,19 @@ export default function App() {
       if (!sid || backendId === null) {
         try {
           const apiChat = await apiCreateChat();
-          sid = String(apiChat.chat_id);
-          backendId = apiChat.chat_id;
+          const createdChatId = getChatId(apiChat);
+          if (createdChatId === null) {
+            throw new Error("Invalid chat payload: missing id");
+          }
+          sid = String(createdChatId);
+          backendId = createdChatId;
           const newSession: ChatSession = {
             id: sid,
-            backendId: apiChat.chat_id,
+            backendId: createdChatId,
             title: text.slice(0, 40) || "New Chat",
             messages: [],
             createdAt: new Date(apiChat.created_at),
+            updatedAt: getUpdatedAt(apiChat),
           };
           setSessions((prev) => [newSession, ...prev]);
           setActiveSessionId(sid);
@@ -207,6 +271,7 @@ export default function App() {
       const capturedSid = sid;
       updateSession(capturedSid, (s) => ({
         ...s,
+        updatedAt: new Date(),
         messages: [...s.messages, userMsg, botMsg],
       }));
 
@@ -217,7 +282,11 @@ export default function App() {
         // onEvent
         (event) => {
           if (event.type === "title_update") {
-            updateSession(capturedSid, (s) => ({ ...s, title: event.content }));
+            updateSession(capturedSid, (s) => ({
+              ...s,
+              title: event.content,
+              updatedAt: new Date(),
+            }));
             return;
           }
           updateMessage(capturedSid, botId, (m) => {
@@ -237,6 +306,7 @@ export default function App() {
             isStreaming: false,
             timestamp: new Date(),
           }));
+          updateSession(capturedSid, (s) => ({ ...s, updatedAt: new Date() }));
           abortRef.current = null;
         },
         // onError
@@ -247,6 +317,7 @@ export default function App() {
             isStreaming: false,
             content: m.content || "Sorry, something went wrong. Please try again.",
           }));
+          updateSession(capturedSid, (s) => ({ ...s, updatedAt: new Date() }));
           abortRef.current = null;
         },
       );
@@ -254,11 +325,15 @@ export default function App() {
     [activeSessionId, activeSession, updateSession, updateMessage]
   );
 
+  const sortedSessions = [...sessions].sort(
+    (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()
+  );
+
   // ── Render ────────────────────────────────────────────────────
   return (
     <div className="flex h-screen bg-cream">
       <Sidebar
-        sessions={sessions}
+        sessions={sortedSessions}
         activeSessionId={activeSessionId}
         onNewChat={handleNewChat}
         onSelectSession={handleSelectSession}

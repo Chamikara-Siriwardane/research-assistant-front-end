@@ -14,6 +14,7 @@ export interface ChatSession {
   title: string;
   messages: Message[];
   createdAt: Date;
+  updatedAt: Date;
 }
 
 export type DocumentStatus = "processing" | "ready" | "failed" | null;

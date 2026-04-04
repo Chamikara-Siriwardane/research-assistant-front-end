@@ -1,9 +1,43 @@
 const BASE_URL = "http://localhost:8000";
 
 export interface ApiChat {
-  chat_id: number;
+  id?: number;
+  chat_id?: number;
   title: string;
   created_at: string;
+  updated_at?: string;
+}
+
+export interface ApiChatSummary {
+  id: number;
+  title: string;
+  updated_at: string;
+}
+
+export interface ApiMessageOut {
+  id: number;
+  chat_id: number;
+  sender_type: "user" | "jarvis";
+  content: string;
+  timestamp: string;
+}
+
+export interface ApiDocumentOut {
+  id: number;
+  chat_id: number;
+  file_name: string;
+  s3_url: string;
+  status: "processing" | "ready" | "failed";
+  uploaded_at: string;
+}
+
+export interface ApiChatDetail {
+  id: number;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  messages: ApiMessageOut[];
+  documents: ApiDocumentOut[];
 }
 
 export interface ApiDocument {
@@ -22,10 +56,16 @@ export interface SSEEvent {
   content: string;
 }
 
-export async function fetchChats(): Promise<ApiChat[]> {
+export async function fetchChats(): Promise<ApiChatSummary[]> {
   const res = await fetch(`${BASE_URL}/api/chats/`);
   if (!res.ok) throw new Error(`fetchChats failed: ${res.status}`);
-  return res.json() as Promise<ApiChat[]>;
+  return res.json() as Promise<ApiChatSummary[]>;
+}
+
+export async function fetchChat(chatId: number): Promise<ApiChatDetail> {
+  const res = await fetch(`${BASE_URL}/api/chats/${chatId}`);
+  if (!res.ok) throw new Error(`fetchChat failed: ${res.status}`);
+  return res.json() as Promise<ApiChatDetail>;
 }
 
 export async function createChat(): Promise<ApiChat> {

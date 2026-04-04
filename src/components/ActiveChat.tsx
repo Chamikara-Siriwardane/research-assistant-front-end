@@ -67,7 +67,7 @@ export default function ActiveChat({
                       />
                     )}
                     {msg.content && (
-                      <div className="prose prose-sm max-w-none text-sm leading-relaxed">
+                      <div className="prose prose-slate max-w-none text-sm leading-relaxed">
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm, remarkMath]}
                           rehypePlugins={[rehypeKatex]}

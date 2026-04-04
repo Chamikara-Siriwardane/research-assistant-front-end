@@ -2,24 +2,14 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import Sidebar from "./components/Sidebar";
 import EmptyState from "./components/EmptyState";
 import ActiveChat from "./components/ActiveChat";
-import type { ChatSession, Message, AgentStep, DocumentStatus } from "./types";
+import type { ChatSession, Message, DocumentStatus } from "./types";
 import {
   fetchChats,
   createChat as apiCreateChat,
   uploadDocument as apiUploadDocument,
   checkDocumentStatus as apiCheckDocumentStatus,
+  streamMessage,
 } from "./services/api";
-
-// ── Mock agent simulation ──────────────────────────────────────
-const MOCK_AGENT_STEPS: Omit<AgentStep, "status">[] = [
-  { agent: "Routing Agent", text: "analyzing request..." },
-  { agent: "RAG Agent", text: "retrieving relevant PDFs..." },
-  { agent: "Thinking", text: "synthesizing information..." },
-  { agent: "Formatter", text: "formatting response..." },
-];
-
-const MOCK_RESPONSE =
-  "Based on my analysis of the relevant documents, here's what I found:\n\nThe key findings suggest that transformer-based architectures continue to outperform traditional approaches in multi-document summarization tasks. Specifically, the retrieval-augmented generation (RAG) pipeline showed a 23% improvement in factual consistency when compared to vanilla generation methods.\n\nWould you like me to dive deeper into any specific aspect of this analysis?";
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
@@ -30,8 +20,8 @@ export default function App() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [documentStatus, setDocumentStatus] = useState<DocumentStatus>(null);
-  const timerRefs = useRef<ReturnType<typeof setTimeout>[]>([]);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId) ?? null;
 
@@ -65,6 +55,16 @@ export default function App() {
       setSessions((prev) => prev.map((s) => (s.id === id ? updater(s) : s)));
     },
     []
+  );
+
+  const updateMessage = useCallback(
+    (sessionId: string, msgId: string, updater: (m: Message) => Message) => {
+      updateSession(sessionId, (s) => ({
+        ...s,
+        messages: s.messages.map((m) => (m.id === msgId ? updater(m) : m)),
+      }));
+    },
+    [updateSession]
   );
 
   const handleNewChat = useCallback(async () => {
@@ -149,19 +149,24 @@ export default function App() {
     [activeSession]
   );
 
-  // ── Send message + mock agent flow ────────────────────────────
+  // ── Send message + SSE streaming ────────────────────────────
   const handleSend = useCallback(
     async (text: string, file?: File) => {
-      // Clear any running timers from previous simulation
-      timerRefs.current.forEach(clearTimeout);
-      timerRefs.current = [];
+      // Cancel any in-flight stream
+      if (abortRef.current) {
+        abortRef.current.abort();
+        abortRef.current = null;
+      }
 
       // Create or reuse session
       let sid = activeSessionId;
-      if (!sid) {
+      let backendId = activeSession?.backendId ?? null;
+
+      if (!sid || backendId === null) {
         try {
           const apiChat = await apiCreateChat();
           sid = String(apiChat.chat_id);
+          backendId = apiChat.chat_id;
           const newSession: ChatSession = {
             id: sid,
             backendId: apiChat.chat_id,
@@ -172,40 +177,31 @@ export default function App() {
           setSessions((prev) => [newSession, ...prev]);
           setActiveSessionId(sid);
         } catch {
-          // Fallback to local-only session if API is unavailable
-          sid = uid();
-          const newSession: ChatSession = {
-            id: sid,
-            title: text.slice(0, 40) || "Untitled",
-            messages: [],
-            createdAt: new Date(),
-          };
-          setSessions((prev) => [newSession, ...prev]);
-          setActiveSessionId(sid);
+          console.error("Failed to create chat session");
+          return;
         }
       }
 
       // Add user message
       const userMsg: Message = {
         id: uid(),
-        role: "user",
+        senderType: "user",
         content: text,
+        thoughts: [],
+        isStreaming: false,
         timestamp: new Date(),
         attachedFile: file?.name,
       };
 
-      // Add assistant placeholder with pending steps
+      // Add empty Jarvis message placeholder
       const botId = uid();
-      const initialSteps: AgentStep[] = MOCK_AGENT_STEPS.map((s) => ({
-        ...s,
-        status: "pending",
-      }));
       const botMsg: Message = {
         id: botId,
-        role: "assistant",
+        senderType: "jarvis",
         content: "",
+        thoughts: [],
+        isStreaming: true,
         timestamp: new Date(),
-        agentSteps: initialSteps,
       };
 
       const capturedSid = sid;
@@ -214,59 +210,48 @@ export default function App() {
         messages: [...s.messages, userMsg, botMsg],
       }));
 
-      // Simulate agent steps one by one
-      MOCK_AGENT_STEPS.forEach((_, i) => {
-        // Mark step as running
-        const t1 = setTimeout(() => {
-          updateSession(capturedSid, (s) => ({
-            ...s,
-            messages: s.messages.map((m) =>
-              m.id === botId
-                ? {
-                    ...m,
-                    agentSteps: m.agentSteps!.map((step, j) =>
-                      j === i ? { ...step, status: "running" } : step
-                    ),
-                  }
-                : m
-            ),
+      // Start SSE stream
+      abortRef.current = streamMessage(
+        backendId,
+        text,
+        // onEvent
+        (event) => {
+          if (event.type === "title_update") {
+            updateSession(capturedSid, (s) => ({ ...s, title: event.content }));
+            return;
+          }
+          updateMessage(capturedSid, botId, (m) => {
+            if (event.type === "thought") {
+              return { ...m, thoughts: [...m.thoughts, event.content] };
+            }
+            if (event.type === "text") {
+              return { ...m, content: m.content + event.content };
+            }
+            return m;
+          });
+        },
+        // onDone
+        () => {
+          updateMessage(capturedSid, botId, (m) => ({
+            ...m,
+            isStreaming: false,
+            timestamp: new Date(),
           }));
-        }, i * 1200 + 400);
-        timerRefs.current.push(t1);
-
-        // Mark step as done
-        const t2 = setTimeout(() => {
-          updateSession(capturedSid, (s) => ({
-            ...s,
-            messages: s.messages.map((m) =>
-              m.id === botId
-                ? {
-                    ...m,
-                    agentSteps: m.agentSteps!.map((step, j) =>
-                      j === i ? { ...step, status: "done" } : step
-                    ),
-                  }
-                : m
-            ),
+          abortRef.current = null;
+        },
+        // onError
+        (err) => {
+          console.error("Stream error:", err);
+          updateMessage(capturedSid, botId, (m) => ({
+            ...m,
+            isStreaming: false,
+            content: m.content || "Sorry, something went wrong. Please try again.",
           }));
-        }, (i + 1) * 1200);
-        timerRefs.current.push(t2);
-      });
-
-      // Add final response text
-      const tFinal = setTimeout(() => {
-        updateSession(capturedSid, (s) => ({
-          ...s,
-          messages: s.messages.map((m) =>
-            m.id === botId
-              ? { ...m, content: MOCK_RESPONSE, timestamp: new Date() }
-              : m
-          ),
-        }));
-      }, MOCK_AGENT_STEPS.length * 1200 + 600);
-      timerRefs.current.push(tFinal);
+          abortRef.current = null;
+        },
+      );
     },
-    [activeSessionId, updateSession]
+    [activeSessionId, activeSession, updateSession, updateMessage]
   );
 
   // ── Render ────────────────────────────────────────────────────

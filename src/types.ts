@@ -1,15 +1,10 @@
-export interface AgentStep {
-  agent: string;
-  text: string;
-  status: "pending" | "running" | "done";
-}
-
 export interface Message {
   id: string;
-  role: "user" | "assistant";
+  senderType: "user" | "jarvis";
   content: string;
+  thoughts: string[];
+  isStreaming: boolean;
   timestamp: Date;
-  agentSteps?: AgentStep[];
   attachedFile?: string;
 }
 

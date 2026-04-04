@@ -1,20 +1,27 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Loader2, Check } from "lucide-react";
-import type { AgentStep } from "../types";
+import { ChevronDown, ChevronRight, Loader2, Check, BrainCircuit } from "lucide-react";
 
 interface AgentThoughtsProps {
-  steps: AgentStep[];
-  isComplete: boolean;
+  readonly thoughts: string[];
+  readonly isStreaming: boolean;
 }
 
-export default function AgentThoughts({ steps, isComplete }: AgentThoughtsProps) {
+function getSummaryText(isStreaming: boolean, count: number): string {
+  const plural = count === 1 ? "" : "s";
+  if (isStreaming) {
+    return count === 0
+      ? "Agent working..."
+      : `Agent working... (${count} step${plural})`;
+  }
+  return `Analyzed ${count} step${plural}`;
+}
+
+export default function AgentThoughts({ thoughts, isStreaming }: AgentThoughtsProps) {
   const [expanded, setExpanded] = useState(false);
 
-  const doneCount = steps.filter((s) => s.status === "done").length;
+  if (thoughts.length === 0 && !isStreaming) return null;
 
-  const summaryText = isComplete
-    ? `Analyzed your request (${doneCount} step${doneCount !== 1 ? "s" : ""})`
-    : `Working... (${doneCount}/${steps.length} steps)`;
+  const summaryText = getSummaryText(isStreaming, thoughts.length);
 
   return (
     <div className="mb-3">
@@ -22,11 +29,12 @@ export default function AgentThoughts({ steps, isComplete }: AgentThoughtsProps)
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-2 text-xs text-text-secondary hover:text-text-primary transition-colors cursor-pointer group"
       >
-        {isComplete ? (
-          <Check size={14} className="text-green-600" />
-        ) : (
+        {isStreaming ? (
           <Loader2 size={14} className="animate-spin text-accent" />
+        ) : (
+          <Check size={14} className="text-green-600" />
         )}
+        <BrainCircuit size={14} className="opacity-60" />
         <span>{summaryText}</span>
         {expanded ? (
           <ChevronDown size={12} className="opacity-50" />
@@ -37,26 +45,17 @@ export default function AgentThoughts({ steps, isComplete }: AgentThoughtsProps)
 
       {expanded && (
         <div className="mt-2 ml-1 pl-4 border-l-2 border-border space-y-1.5">
-          {steps.map((step, i) => (
-            <div key={i} className="flex items-start gap-2 text-xs">
-              {step.status === "done" ? (
-                <Check size={12} className="shrink-0 mt-0.5 text-green-600" />
-              ) : step.status === "running" ? (
-                <Loader2
-                  size={12}
-                  className="shrink-0 mt-0.5 animate-spin text-accent"
-                />
-              ) : (
-                <div className="w-3 h-3 shrink-0 mt-0.5 rounded-full border border-border" />
-              )}
-              <span className="font-mono text-text-muted leading-relaxed">
-                <span className="text-text-secondary font-medium">
-                  [{step.agent}]
-                </span>{" "}
-                {step.text}
-              </span>
+          {thoughts.map((thought, i) => (
+            <div key={`thought-${i}-${thought.slice(0, 20)}`} className="text-xs font-mono text-text-muted leading-relaxed">
+              {thought}
             </div>
           ))}
+          {isStreaming && thoughts.length > 0 && (
+            <div className="text-xs text-text-muted">
+              <Loader2 size={10} className="inline animate-spin mr-1" />
+              <span className="italic">processing...</span>
+            </div>
+          )}
         </div>
       )}
     </div>

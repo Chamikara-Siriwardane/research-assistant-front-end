@@ -71,7 +71,7 @@ export default function Sidebar({
             >
               <div className="flex items-center gap-2">
                 <MessageSquare size={14} className="shrink-0 opacity-50" />
-                <span className="truncate">{session.title}</span>
+                <span className="truncate" title={session.title}>{session.title}</span>
               </div>
             </button>
           ))}

@@ -1,15 +1,16 @@
 import { useEffect, useRef } from "react";
 import { Bot, User } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import type { Message, DocumentStatus } from "../types";
 import AgentThoughts from "./AgentThoughts";
 import ChatInput from "./ChatInput";
 
 interface ActiveChatProps {
-  messages: Message[];
-  onSend: (text: string, file?: File) => void;
-  onFileUpload?: (file: File) => void;
-  isUploading?: boolean;
-  documentStatus?: DocumentStatus;
+  readonly messages: Message[];
+  readonly onSend: (text: string, file?: File) => void;
+  readonly onFileUpload?: (file: File) => void;
+  readonly isUploading?: boolean;
+  readonly documentStatus?: DocumentStatus;
 }
 
 export default function ActiveChat({
@@ -32,7 +33,7 @@ export default function ActiveChat({
         <div className="max-w-2xl mx-auto space-y-6">
           {messages.map((msg) => (
             <div key={msg.id}>
-              {msg.role === "user" ? (
+              {msg.senderType === "user" ? (
                 <div className="flex justify-end">
                   <div className="flex items-start gap-2 max-w-[80%]">
                     <div className="bg-user-bubble rounded-2xl rounded-tr-sm px-4 py-3">
@@ -56,18 +57,19 @@ export default function ActiveChat({
                     <Bot size={14} className="text-accent" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    {msg.agentSteps && msg.agentSteps.length > 0 && (
+                    {(msg.thoughts.length > 0 || msg.isStreaming) && (
                       <AgentThoughts
-                        steps={msg.agentSteps}
-                        isComplete={msg.agentSteps.every(
-                          (s) => s.status === "done"
-                        )}
+                        thoughts={msg.thoughts}
+                        isStreaming={msg.isStreaming && msg.content.length === 0}
                       />
                     )}
                     {msg.content && (
-                      <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                        {msg.content}
-                      </p>
+                      <div className="prose prose-sm max-w-none text-sm leading-relaxed">
+                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      </div>
+                    )}
+                    {msg.isStreaming && msg.content.length === 0 && msg.thoughts.length === 0 && (
+                      <p className="text-sm text-text-muted italic">Thinking...</p>
                     )}
                   </div>
                 </div>
@@ -76,7 +78,7 @@ export default function ActiveChat({
               {/* Timestamp */}
               <div
                 className={`mt-1 text-[10px] text-text-muted ${
-                  msg.role === "user" ? "text-right mr-9" : "ml-9"
+                  msg.senderType === "user" ? "text-right mr-9" : "ml-9"
                 }`}
               >
                 {msg.timestamp.toLocaleTimeString([], {

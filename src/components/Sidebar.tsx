@@ -24,7 +24,7 @@ export default function Sidebar({
   const [searchOpen, setSearchOpen] = useState(false);
 
   return (
-    <aside className="w-[260px] min-w-[260px] h-screen bg-sidebar border-r border-border flex flex-col">
+    <aside className="w-[300px] min-w-[300px] h-screen bg-sidebar border-r border-border flex flex-col">
       {/* Header */}
       <div className="px-4 pt-5 pb-2">
         <h1 className="text-lg font-bold tracking-tight text-text-primary">

@@ -33,12 +33,12 @@ export default function ActiveChat({
     <div className="flex-1 flex flex-col h-screen">
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-6">
-        <div className="max-w-2xl mx-auto space-y-6">
+        <div className="max-w-3xl mx-auto space-y-6">
           {messages.map((msg) => (
             <div key={msg.id}>
               {msg.senderType === "user" ? (
                 <div className="flex justify-end">
-                  <div className="flex items-start gap-2 max-w-[80%]">
+                  <div className="flex items-start gap-2 max-w-[78%]">
                     <div className="bg-user-bubble rounded-2xl rounded-tr-sm px-4 py-3">
                       {msg.attachedFile && (
                         <div className="text-xs text-text-muted mb-1.5 flex items-center gap-1">
@@ -55,7 +55,7 @@ export default function ActiveChat({
                   </div>
                 </div>
               ) : (
-                <div className="flex items-start gap-2 max-w-[80%]">
+                <div className="flex items-start gap-2 w-full max-w-[90%] sm:max-w-[92%]">
                   <div className="shrink-0 w-7 h-7 rounded-full bg-accent/15 flex items-center justify-center mt-1">
                     <Bot size={14} className="text-accent" />
                   </div>
@@ -102,7 +102,7 @@ export default function ActiveChat({
 
       {/* Input fixed at bottom */}
       <div className="border-t border-border bg-cream/80 backdrop-blur-sm px-4 py-4">
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-3xl mx-auto">
           <ChatInput
             onSend={onSend}
             onFileUpload={onFileUpload}

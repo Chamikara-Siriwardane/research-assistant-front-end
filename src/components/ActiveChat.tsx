@@ -1,6 +1,9 @@
 import { useEffect, useRef } from "react";
 import { Bot, User } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import rehypeKatex from "rehype-katex";
+import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 import type { Message, DocumentStatus } from "../types";
 import AgentThoughts from "./AgentThoughts";
 import ChatInput from "./ChatInput";
@@ -65,7 +68,12 @@ export default function ActiveChat({
                     )}
                     {msg.content && (
                       <div className="prose prose-sm max-w-none text-sm leading-relaxed">
-                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm, remarkMath]}
+                          rehypePlugins={[rehypeKatex]}
+                        >
+                          {msg.content}
+                        </ReactMarkdown>
                       </div>
                     )}
                     {msg.isStreaming && msg.content.length === 0 && msg.thoughts.length === 0 && (

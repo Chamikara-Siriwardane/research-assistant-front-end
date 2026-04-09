@@ -83,17 +83,6 @@ export default function ActiveChat({
                 </div>
               )}
 
-              {/* Timestamp */}
-              <div
-                className={`mt-1 text-[10px] text-text-muted ${
-                  msg.senderType === "user" ? "text-right mr-9" : "ml-9"
-                }`}
-              >
-                {msg.timestamp.toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </div>
             </div>
           ))}
           <div ref={bottomRef} />
